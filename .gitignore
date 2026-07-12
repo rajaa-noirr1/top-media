@@ -1,0 +1,7 @@
+# original high-res client footage — never upload (1.7 GB); web versions live in assets/work/web/
+video-originals/
+
+# local tooling
+.claude/
+fonts_src.css
+*.py
