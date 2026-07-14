@@ -341,15 +341,23 @@
       const off = document.createElement('canvas');
       off.width = vw; off.height = vh;
       const o = off.getContext('2d');
-      const scale = Math.min((vw * 0.78) / 160, (vh * 0.78) / 123);
+      const scale = Math.min((vw * 0.84) / 160, (vh * 0.84) / 123);
       o.setTransform(scale, 0, 0, scale, (vw - 160 * scale) / 2, (vh - 123 * scale) / 2);
-      // light stroke bolds the letterform WITHOUT closing the arrow notches
-      o.lineWidth = 4;
+      o.lineWidth = 2;
       o.lineJoin = 'round';
       ['M0 0H74L51.742 33H0V0Z', 'M160 0H86L108.258 33H160V0Z', 'M102 33H95V123H65V33H58L80 0L102 33Z']
         .forEach((d) => { const path = new Path2D(d); o.fill(path); o.stroke(path); });
+      // carve the arrow notches back out, wide and crisp — the mark must never read as a plain T
+      o.globalCompositeOperation = 'destination-out';
+      o.lineWidth = 8;
+      o.lineCap = 'round';
+      o.beginPath();
+      o.moveTo(79, -4); o.lineTo(52, 38);
+      o.moveTo(81, -4); o.lineTo(108, 38);
+      o.stroke();
+      o.globalCompositeOperation = 'source-over';
       const data = o.getImageData(0, 0, vw, vh).data;
-      const step = 6;
+      const step = 5;
       pts = [];
       for (let y = 0; y < vh; y += step) {
         for (let x = 0; x < vw; x += step) {
@@ -419,10 +427,11 @@
         vctx.fillStyle = `rgba(255, 207, 12, ${a})`;
         vctx.fillRect(p.x - p.r / 2, p.y - p.r / 2, p.r, p.r);
       }
-      // the mark itself — square particles, sharp like the brand
+      // the mark itself — square particles that charge with light, bottom to top
+      const waveY = vh * (1.15 - ((vt % 3.4) / 3.4) * 1.3);
       for (const p of pts) {
-        const wx = Math.sin(vt * p.tw + p.ph) * 1.7;
-        const wy = Math.cos(vt * p.tw * 0.9 + p.ph) * 1.7;
+        const wx = Math.sin(vt * p.tw + p.ph) * 1.3;
+        const wy = Math.cos(vt * p.tw * 0.9 + p.ph) * 1.3;
         let ax = (p.tx + wx - p.x) * 0.045;
         let ay = (p.ty + wy - p.y) * 0.045;
         const dx = p.x - mouse.x, dy = p.y - mouse.y;
@@ -436,9 +445,14 @@
         p.vx = (p.vx + ax) * 0.86;
         p.vy = (p.vy + ay) * 0.86;
         p.x += p.vx; p.y += p.vy;
-        const a = 0.35 + 0.6 * Math.abs(Math.sin(vt * p.tw + p.ph));
-        vctx.fillStyle = `rgba(255, 207, 12, ${a})`;
-        vctx.fillRect(p.x - p.r, p.y - p.r, p.r * 2, p.r * 2);
+        const dW = Math.abs(p.y - waveY);
+        const g = dW < 80 ? 1 - dW / 80 : 0; // rising glow band
+        const a = Math.min(1, 0.32 + 0.45 * Math.abs(Math.sin(vt * p.tw + p.ph)) + g * 0.5);
+        const size = p.r * (1 + g * 0.85);
+        vctx.fillStyle = g > 0.02
+          ? `rgba(255, ${Math.round(207 + 36 * g)}, ${Math.round(12 + 150 * g)}, ${a})`
+          : `rgba(255, 207, 12, ${a})`;
+        vctx.fillRect(p.x - size, p.y - size, size * 2, size * 2);
       }
       vctx.restore();
       requestAnimationFrame(vizLoop);
