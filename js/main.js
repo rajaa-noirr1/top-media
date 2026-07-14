@@ -342,7 +342,8 @@
       off.width = vw; off.height = vh;
       const o = off.getContext('2d');
       const scale = Math.min((vw * 0.84) / 160, (vh * 0.84) / 123);
-      o.setTransform(scale, 0, 0, scale, (vw - 160 * scale) / 2, (vh - 123 * scale) / 2);
+      const ox = (vw - 160 * scale) / 2, oy = (vh - 123 * scale) / 2;
+      o.setTransform(scale, 0, 0, scale, ox, oy);
       o.lineWidth = 2;
       o.lineJoin = 'round';
       ['M0 0H74L51.742 33H0V0Z', 'M160 0H86L108.258 33H160V0Z', 'M102 33H95V123H65V33H58L80 0L102 33Z']
@@ -362,6 +363,10 @@
       for (let y = 0; y < vh; y += step) {
         for (let x = 0; x < vw; x += step) {
           if (data[(y * vw + x) * 4 + 3] > 128) {
+            // logo-space coords + which piece this atom belongs to (arrow vs crossbars)
+            const lx = (x - ox) / scale, ly = (y - oy) / scale;
+            const inStem = ly >= 31 && lx >= 63 && lx <= 97;
+            const inArrowHead = ly < 33 && Math.abs(lx - 80) <= (22 * ly) / 33 + 3;
             pts.push({
               tx: x + (Math.random() - 0.5) * 4, ty: y + (Math.random() - 0.5) * 4,
               x: Math.random() * vw, y: Math.random() * vh,
@@ -369,6 +374,8 @@
               r: 1 + Math.random() * 1.2,
               ph: Math.random() * Math.PI * 2,
               tw: 0.5 + Math.random() * 1.1,
+              lx, ly,
+              isArrow: inStem || inArrowHead,
             });
           }
         }
@@ -427,8 +434,9 @@
         vctx.fillStyle = `rgba(255, 207, 12, ${a})`;
         vctx.fillRect(p.x - p.r / 2, p.y - p.r / 2, p.r, p.r);
       }
-      // the mark itself — square particles that charge with light, bottom to top
-      const waveY = vh * (1.15 - ((vt % 3.4) / 3.4) * 1.3);
+      // the mark itself — a 10s light story:
+      // 1) the arrow charges bottom → top  2) light ripples out across the crossbars  3) calm
+      const wt = vt % 10;
       for (const p of pts) {
         const wx = Math.sin(vt * p.tw + p.ph) * 1.3;
         const wy = Math.cos(vt * p.tw * 0.9 + p.ph) * 1.3;
@@ -445,8 +453,33 @@
         p.vx = (p.vx + ax) * 0.86;
         p.vy = (p.vy + ay) * 0.86;
         p.x += p.vx; p.y += p.vy;
-        const dW = Math.abs(p.y - waveY);
-        const g = dW < 80 ? 1 - dW / 80 : 0; // rising glow band
+
+        let g = 0;
+        if (wt < 3.8) {
+          // phase 1: the wave climbs the arrow; charged atoms stay lit
+          if (p.isArrow) {
+            const front = 128 - (wt / 3.8) * 140;
+            if (p.ly > front) g = 0.55;
+            const d = Math.abs(p.ly - front);
+            if (d < 15) g = Math.max(g, 1 - d / 15);
+          }
+        } else if (wt < 7.4) {
+          // phase 2: rounded ripple spreads from the arrowhead across the crossbars
+          if (p.isArrow) {
+            g = 0.55;
+          } else {
+            const R = ((wt - 3.8) / 3.6) * 120;
+            const d = Math.hypot(p.lx - 80, p.ly - 8);
+            if (d < R - 14) g = 0.5;
+            const bd = Math.abs(d - R);
+            if (bd < 16) g = Math.max(g, 1 - bd / 16);
+          }
+        } else {
+          // phase 3: everything breathes back down to rest
+          const fade = Math.max(0, 1 - (wt - 7.4) / 1.6);
+          g = (p.isArrow ? 0.55 : 0.5) * fade;
+        }
+
         const a = Math.min(1, 0.32 + 0.45 * Math.abs(Math.sin(vt * p.tw + p.ph)) + g * 0.5);
         const size = p.r * (1 + g * 0.85);
         vctx.fillStyle = g > 0.02
