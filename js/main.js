@@ -434,9 +434,13 @@
         vctx.fillStyle = `rgba(255, 207, 12, ${a})`;
         vctx.fillRect(p.x - p.r / 2, p.y - p.r / 2, p.r, p.r);
       }
-      // the mark itself — a 10s light story:
-      // 1) the arrow charges bottom → top  2) light ripples out across the crossbars  3) calm
-      const wt = vt % 10;
+      // the mark itself — a 15s light story:
+      // the wave climbs the arrow, hands off instantly to a rounded ripple across the
+      // crossbars, and every atom cools back down ~2.5s after the light passes it
+      const wt = vt % 15;
+      const CLIMB = 3.2;             // seconds for the arrow charge
+      const RIPPLE_V = 120 / 2.8;    // ripple speed: reaches the far corners ~2.8s later
+      const ARROW_TOP = ((128 - 8) / 140) * CLIMB;  // instant: ripple starts as light hits the arrowhead
       for (const p of pts) {
         const wx = Math.sin(vt * p.tw + p.ph) * 1.3;
         const wy = Math.cos(vt * p.tw * 0.9 + p.ph) * 1.3;
@@ -454,30 +458,18 @@
         p.vy = (p.vy + ay) * 0.86;
         p.x += p.vx; p.y += p.vy;
 
+        // when does the light front pass THIS atom?
+        const hitT = p.isArrow
+          ? ((128 - p.ly) / 140) * CLIMB
+          : ARROW_TOP + Math.max(0, Math.hypot(p.lx - 80, p.ly - 8) - 14) / RIPPLE_V;
+        const dt = wt - hitT;
         let g = 0;
-        if (wt < 3.8) {
-          // phase 1: the wave climbs the arrow; charged atoms stay lit
-          if (p.isArrow) {
-            const front = 128 - (wt / 3.8) * 140;
-            if (p.ly > front) g = 0.55;
-            const d = Math.abs(p.ly - front);
-            if (d < 15) g = Math.max(g, 1 - d / 15);
-          }
-        } else if (wt < 7.4) {
-          // phase 2: rounded ripple spreads from the arrowhead across the crossbars
-          if (p.isArrow) {
-            g = 0.55;
-          } else {
-            const R = ((wt - 3.8) / 3.6) * 120;
-            const d = Math.hypot(p.lx - 80, p.ly - 8);
-            if (d < R - 14) g = 0.5;
-            const bd = Math.abs(d - R);
-            if (bd < 16) g = Math.max(g, 1 - bd / 16);
-          }
-        } else {
-          // phase 3: everything breathes back down to rest
-          const fade = Math.max(0, 1 - (wt - 7.4) / 1.6);
-          g = (p.isArrow ? 0.55 : 0.5) * fade;
+        if (dt > -0.45 && dt < 0) {
+          const t = (dt + 0.45) / 0.45;
+          g = t * t * (3 - 2 * t);   // smooth approach
+        } else if (dt >= 0 && dt < 2.6) {
+          const t = 1 - dt / 2.6;
+          g = t * t;                 // eased cool-down back to rest
         }
 
         const a = Math.min(1, 0.32 + 0.45 * Math.abs(Math.sin(vt * p.tw + p.ph)) + g * 0.5);
